@@ -1,0 +1,63 @@
+#include  "bsp_lab6.h"
+
+              NAME       Main
+              PUBLIC     Main
+              PUBLIC     State,remain,resultmul,state0
+              PUBLIC     volt,volt_10,volt_100,volt
+              EXTERN     Func1,Func2,Func3,PORT1_ISR,SysConfig,ADC_ISR
+              
+;--------------------------------------------------------------- 
+              ORG RAM
+State         DW         0
+volt          DW         0
+volt_10       DW         0
+volt_100      DW         0
+remain        DW         0
+resultmul     DS32 1            
+;---------------------------------------------------------------              
+              RSEG   CSTACK
+              RSEG   CODE
+;---------------------------------------------------------------   
+Main          mov.w   #SFE(CSTACK),SP   ; Initialize stackpointer
+              call    #SysConfig
+              
+;-----------------------FSM_loop-------------------------------
+
+state0       cmp     #0,State         ;check if state0           
+             jnz     state1
+sleep        bis.w   #CPUOFF+GIE,SR
+             nop
+
+state1       cmp     #1,State         ;check if state1
+             jnz     state2
+             call    #Func1           ;infinite function  
+             clr.b   PB_IFG
+             jmp     sleep
+             
+state2       cmp     #2,State         ;check if state2
+             jnz     state3       
+             call    #Func2           ;infinite function
+             clr.b   PB_IFG
+             mov     #0,State
+                    
+state3       cmp     #3,State         ;check if state2
+             jnz     state0
+             DINT             
+             call    #Func3          ;infinite function
+             EINT
+             clr.b   PB_IFG
+             jmp     sleep
+             jmp     state0            
+             
+     
+;---------------------------------------------------------------           
+              COMMON  INTVEC     ; Interrupt Vectors
+;--------------------------------------------------------------- 
+              ORG     PORT1_VECTOR           
+              DW      PORT1_ISR
+              ORG     RESET_VECTOR 
+              DW      Main
+              ORG     ADCVECTOR        
+              DW      ADC_ISR
+              END            
+;---------------------------------------------------------------  

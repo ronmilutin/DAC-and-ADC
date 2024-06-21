@@ -1,0 +1,61 @@
+#include  "bsp_lab6.h"
+;---------------------------------------------------------------
+             MODULE     API
+             PUBLIC     Func1,Func2,Func3
+             EXTERN     SysConfig
+             EXTERN     Lcd_print,Lcd_strobe,delay,val_to_volt
+              
+;---------------------------------------------------------------             
+             RSEG       CODE
+;---------------------------------------------------------------  
+Func1        mov    #supval,sup
+             mov    #infval,inf
+             mov    #sample_num,count
+             
+start        dec count
+             jz  print_minmax
+             
+             bis.w   #ENC+ADCstart,ADCCTL0    ; start ADC
+             bis.w   #CPUOFF+GIE,SR
+             
+             jmp     start
+             ret
+             
+print_minmax push  sup
+             call  #val_to_volt
+             push  inf
+             call  #val_to_volt
+             jmp   Func1
+             ret
+;---------------------------------------------------------------             
+Func2        clr     R14
+             clr     R15
+             mov     #0x8000,count
+             
+start2       dec count
+             jz  print_avg
+             
+             bis.w   #ENC+ADCstart,ADCCTL0    ; start ADC
+             bis.w   #CPUOFF+GIE,SR
+             
+             jmp     start2
+             ret
+
+print_avg    mov    #15,R12
+loop         rra    R15
+             rrc    R14
+             dec    R12
+             jnz    loop
+             
+             push   R14
+             call   #val_to_volt
+             jmp    Func2
+             ret       
+;---------------------------------------------------------------  
+Func3        nop
+             ret
+;---------------------------------------------------------------              
+             ENDMOD 
+             END
+;--------------------------------------------------------------- 
+           

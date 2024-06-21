@@ -1,0 +1,47 @@
+#include  "bsp_lab6.h"
+
+              MODULE     BSP
+              PUBLIC     GPIOconfig,,TIMERconfig,ADCconfig  
+              
+;--------------------------------------------------------------------------------------              
+              RSEG       CODE
+;--------------------------------------------------------------------------------------           
+GPIOconfig
+         
+StopWDT  mov.w   #WDTPW+WDTHOLD,&WDTCTL
+
+         ; PB Setup
+         bic.b   #0x03, PB_SEL   
+         bic.b   #0x03, PB_DIR    
+         bis.b   #0x03, PB_IES
+         bis.b   #0x03, PB_IE
+         bic.b   #0x0f, PB_IFG   
+         
+         ; LCD Setup
+         bic.b   #0xFF,LCDdataSel 
+         bis.b   #0xFF,LCDdataDir 
+         bic.b   #0xE0,LCDconSel
+         bis.b   #0xE0,LCDconDir
+         
+         ; input Setup
+              
+         ret
+;------------------------------------------------------------------------------------- 
+;            Timers congiguration 
+;-------------------------------------------------------------------------------------
+TIMERconfig  
+
+            ret
+;-------------------------------------------------------------------------------------- 
+;            ADC congiguration 
+;--------------------------------------------------------------------------------------
+ADCconfig 
+            mov.w   #INCH_3+ADCSSEL,ADCCTL1                  ; input A3 ,smclk input
+            mov.w   #ADCon+ADCSHT+MSC+ADCIE+ADCIFG,ADCCTL0         ; 64xSMCLK, interap+IFG enable 
+AnlogEnable bis.b   #0x04,&ADC10AE0                          ; ADC10 analog enable to P1.3  (only on ADC10)
+
+            ret
+;--------------------------------------------------------------------------------------                      
+         ENDMOD
+         END
+;--------------------------------------------------------------------------------------

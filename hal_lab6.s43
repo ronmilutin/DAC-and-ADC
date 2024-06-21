@@ -1,0 +1,298 @@
+#include  "bsp_lab6.h"
+;---------------------------------------------------------------
+Lcd_cmd      MACRO command
+             push    #delay15ms
+             call    #delay
+             mov.b   command, LCDdata
+             call    #Lcd_strobe
+             ENDM
+;---------------------------------------------------------------
+
+              MODULE     HAL
+              PUBLIC     SysConfig,PORT1_ISR,Lcd_print,delay,Lcd_strobe,ADC_ISR,val_to_volt
+              EXTERN     GPIOconfig,State,state0,TIMERconfig,ADCconfig,state0
+              EXTERN     volt,volt_10,volt_100,remain,resultmul
+              
+;----------------------------------------------------------------
+              RSEG CODE
+;----------------------------------------------------------------
+SysConfig    call   #GPIOconfig
+             call   #TIMERconfig
+             call   #ADCconfig
+             call   #LCDsetup  
+             ret
+;----------------------------------------------------------------
+LCDsetup     bic.b   #0xE0, LCDcon   ; clear control legs
+             push    #delay15ms
+             call    #delay
+             mov.b   #0x3F, LCDdata
+             call    #Lcd_strobe
+             push    #delay5ms
+             call    #delay
+             mov.b   #0x3F, LCDdata
+             call    #Lcd_strobe
+             push    #delay200us
+             call    #delay
+             mov.b   #0x3F, LCDdata
+             call    #Lcd_strobe    
+             Lcd_cmd #0x3C
+             Lcd_cmd #0x0F
+             Lcd_cmd #0x01
+             Lcd_cmd #0x06
+             Lcd_cmd #0x80
+             Lcd_cmd #0x02
+             Lcd_cmd #0x0C
+             ret
+;----------------------------------------------------------------
+Lcd_strobe  bis.b  #LCDE, LCDcon 
+            nop
+            nop
+            bic.b  #LCDE, LCDcon
+            ret
+;----------------------------------------------------------------
+Lcd_print   pop   R4
+            pop   R5
+            
+            push  #delay5ms
+            call  #delay
+            mov.b #0,LCDdata
+            bis.b #LCDRS,LCDcon
+            mov.b R5,LCDdata
+            call  #Lcd_strobe
+            bic.b #LCDRS,LCDcon
+            
+            push R4
+            ret
+;----------------------------------------------------------------
+PORT1_ISR      bic.w    #ENC+ADCstart,ADCCTL0
+               push     #debounceVal
+               call     #delay
+               bit.b    #PB0, PB_IFG   ; looks for flags, checks the bit of input
+               jnz      P2_0
+               bit.b    #PB1, PB_IFG
+               jnz      P2_1
+               bit.b    #PB2, PB_IFG
+               jnz      P2_2
+               reti
+           
+P2_0           mov    #1,State
+               jmp    exitLPM0
+               
+P2_1           mov    #2,State
+               jmp    exitLPM0  
+               
+P2_2           mov    #3,State
+               jmp    exitLPM0
+
+
+exitLPM0       bic    #CPUOFF,0(SP)        ; Exit LMP0
+               bic.b  #0xff,PB_IFG
+               pop    R5
+               pop    R6
+               mov    #state0,R6
+               push   R6
+               push   R5
+               reti
+;-------------------------------------------------------------------------------
+ 
+;-------------------------------------------------------------------------------
+ADC_ISR    cmp  #1,State
+           jne  AVG 
+           
+sup_test   cmp   sup,ADC_MEM
+           JL    inf_test
+           mov   ADC_MEM,sup
+           jmp   end2
+           
+inf_test   cmp   inf,ADC_MEM
+           JGE   end2
+           mov   ADC_MEM,inf
+           jmp  end2
+           
+AVG        add   ADC_MEM,R14
+           adc   R15
+           
+end2       bic.w   #CPUOFF,0(SP)   
+           reti
+;-------------------------------------------------------------------------------
+
+;------------------------------------------------------------------------------- 
+val_to_volt  pop  R10
+             pop  value
+             
+             push  value
+             push  #deltaV
+             call  #DIV16bit
+             pop   remain
+             pop   volt
+             
+             push  #0x000a
+             push  remain
+             call  #MOLT
+             mov   resultmul,remain
+             
+             push  remain
+             push  #deltaV
+             call  #DIV16bit
+             pop   remain
+             pop   volt_10
+             
+             push  #0x000a
+             push  remain
+             call  #MOLT
+             mov   resultmul,remain
+             
+             push  remain
+             push  #deltaV
+             call  #DIV16bit
+             pop   remain
+             pop   volt_100
+             
+             add  #0x30,volt
+             add  #0x30,volt_10
+             add  #0x30,volt_100
+             
+             cmp  #1,State
+             jne  avg_print 
+             
+             cmp  value,inf
+             jne  sup_print
+             
+inf_print    Lcd_cmd #0x02
+             push   #'V'
+             call   #Lcd_print
+             push   #'m'
+             call   #Lcd_print
+             push   #'i'
+             call   #Lcd_print
+             push   #'n'
+             call   #Lcd_print
+             push   #'='
+             call   #Lcd_print
+             push   volt
+             call   #Lcd_print
+             push   #'.'
+             call   #Lcd_print
+             push   volt_10
+             call   #Lcd_print
+             push   volt_100
+             call   #Lcd_print
+             push   #'['
+             call   #Lcd_print
+             push   #'v'
+             call   #Lcd_print
+             push   #']'
+             call   #Lcd_print
+             jmp     exit
+              
+sup_print    Lcd_cmd #0xC0
+             push   #'V'
+             call   #Lcd_print
+             push   #'m'
+             call   #Lcd_print
+             push   #'a'
+             call   #Lcd_print
+             push   #'x'
+             call   #Lcd_print
+             push   #'='
+             call   #Lcd_print
+             push   volt
+             call   #Lcd_print
+             push   #'.'
+             call   #Lcd_print
+             push   volt_10
+             call   #Lcd_print
+             push   volt_100
+             call   #Lcd_print
+             push   #'['
+             call   #Lcd_print
+             push   #'v'
+             call   #Lcd_print
+             push   #']'
+             call   #Lcd_print
+             jmp    exit
+
+avg_print    Lcd_cmd #0x01
+             Lcd_cmd #0x02
+             push   #'V'
+             call   #Lcd_print
+             push   #'a'
+             call   #Lcd_print
+             push   #'v'
+             call   #Lcd_print
+             push   #'g'
+             call   #Lcd_print
+             push   #'='
+             call   #Lcd_print
+             push   volt
+             call   #Lcd_print
+             push   #'.'
+             call   #Lcd_print
+             push   volt_10
+             call   #Lcd_print
+             push   volt_100
+             call   #Lcd_print
+             push   #'['
+             call   #Lcd_print
+             push   #'v'
+             call   #Lcd_print
+             push   #']'
+             call   #Lcd_print
+             
+exit         push  R10             
+             ret
+;-------------------------------------------------------------------------------
+MOLT            pop    R7       ;func address register
+                pop    R6       ;var1
+                pop    R4       ;var2
+                clr    R5       ; C counter
+                clr    resultmul
+
+L11             ADD R6 ,resultmul
+                ADC R5
+                dec     R4
+                jz      L22
+                JMP L11
+
+L22             mov #2, R9
+                mov R5, resultmul(R9)
+                push.w   R7
+                ret 
+;-------------------------------------------------------------------------------            
+DIV16bit        pop    R7      ; Address register
+                pop    R6      ; Devisor
+                pop    R4      ; Devided
+                clr    R8      ; Quotient register
+                clr    R5      ; Reminder register
+                mov    #17,R9
+              
+div             rla     R8
+L1              dec     R9
+                jz      L2
+                rla     R4
+                rlc     R5
+                cmp     R6,R5
+                jlo     div
+                sub     R6,R5
+                setc
+                rlc     R8
+                jmp     L1
+                
+L2              push.w      R8 ; Quotient register
+                push.w      R5 ; Reminder register
+                push.w      R7 ; Address
+                ret       
+;-------------------------------------------------------------------------------
+delay           pop  R6
+                pop  R7
+             
+LD              dec.w R7
+                jnz  LD
+             
+                push R6
+                ret
+;-------------------------------------------------------------------------------
+                ENDMOD      
+                END
+;-------------------------------------------------------------------------------
+              
